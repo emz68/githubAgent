@@ -1,4 +1,4 @@
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Literal, Union
 from pathlib import Path
 from ..models.schemas import CodeChunk, QueryResult
 from ..integrations.github import GitHubIntegration
@@ -8,6 +8,13 @@ from .embeddings import EmbeddingManager
 from .vector_stores import VectorStoreManager
 from .chunk import CodeChunker
 from ..utils.file_utils import FileUtils
+from dataclasses import dataclass
+
+@dataclass
+class Response:
+    content: Union[str, List[str]]  # Could be answer or code snippets
+    context: dict = None
+    needs_clarification: bool = False
 
 class CodeAnalyzer:
     def __init__(self):
@@ -56,21 +63,16 @@ class CodeAnalyzer:
             self.file_utils.cleanup_temp_dir(temp_dir)
     
     def query_codebase(self, question: str, n_results: int = 3, explain: bool = False) -> List[QueryResult]:
-        """Query the codebase with optional explanations"""
-        # Basic vector similarity search
         results = self.vector_store.query(question, n_results)
         
-        if explain:
+        if explain:  # Only call OpenAI if explicitly requested
             for result in results:
                 result.explanation = self.openai.generate_explanation(
                     question=question,
                     code=result.code,
-                    context={
-                        "file": result.file,
-                        "type": result.type,
-                        "name": result.name
-                    }
+                    context={"file": result.file, "type": result.type, "name": result.name}
                 )
+                
         return results
     
     def advanced_query(self, question: str, conversational: bool = False) -> str:
@@ -83,3 +85,107 @@ class CodeAnalyzer:
         print(f"\nAPI Usage Summary:")
         print(f"Total Calls: {stats['total_calls']}")
         print(f"Total Tokens: {stats['total_tokens']}")
+
+    def _classify_intent(self, question: str) -> Literal["SEMANTIC_SEARCH", "ANALYTICAL"]:
+        """Rule-based intent classifier (Option A)."""
+        question = question.lower().strip()
+        
+        analytical_keywords = [
+            "explain", "how", "why", "describe", "walk me through",
+            "analyze", "what is", "compare", "summarize"
+        ]
+        
+        # Questions with these keywords or longer than 15 words -> ANALYTICAL
+        if (any(keyword in question for keyword in analytical_keywords) or
+            len(question.split()) > 15):
+            return "ANALYTICAL"
+        return "SEMANTIC_SEARCH"
+    
+    """ def query_auto(self, question: str, n_results: int = 3, conversational: bool = False) -> str | List[QueryResult]:
+
+        intent = self._classify_intent(question)
+        
+        if intent == "SEMANTIC_SEARCH":
+            return self.query_codebase(question, n_results=n_results, explain=False)  # No API
+        else:
+            return self.advanced_query(question, conversational=conversational)  # Uses API
+         """
+
+    def smart_query(self, question: str, *, max_code_results: int = 3, force_analytical: bool = False, force_semantic: bool = False) -> Response:
+        """
+        Unified endpoint that automatically:
+        - Uses pure ChromaDB for code retrieval
+        - Only invokes LLM when truly needed
+        - Returns consistent response format
+        """
+        # Step 1: Always try semantic search first (no API call)
+        code_results = self.vector_store.query(question, max_code_results)
+        
+        # Step 2: Determine if we need deeper analysis
+        needs_analysis = (
+            force_analytical or
+            (not force_semantic and self._requires_analysis(question, code_results)))
+        
+        if not needs_analysis:
+            return Response(
+                content=[r.code for r in code_results],
+                context={
+                    'files': [r.file for r in code_results],
+                    'types': [r.type for r in code_results]
+                }
+            )
+        
+        # Step 3: Generate analytical answer (with code references)
+        prompt = self._build_hybrid_prompt(question, code_results)
+        answer = self.openai.client.chat.completions.create(
+            model="o4-mini",
+            messages=[{"role": "user", "content": prompt}],
+        ).choices[0].message.content
+        
+        return Response(
+            content=answer,
+            context={
+                'supporting_code': [r.code for r in code_results],
+                'sources': [r.file for r in code_results]
+            }
+        )
+
+    def _requires_analysis(self, question: str, code_results: List[QueryResult]) -> bool:
+        """Heuristic to decide between raw code vs LLM analysis"""
+        question_lower = question.lower()
+        
+        # Case 1: Clearly analytical questions
+        analytical_phrases = {
+            'how', 'why', 'explain', 'analyze', 
+            'compare', 'what is', 'walkthrough'
+        }
+        if any(phrase in question_lower for phrase in analytical_phrases):
+            return True
+        
+        # Case 2: Poor semantic search results
+        if not code_results or len(code_results[0].code) < 20:
+            return True
+            
+        # Case 3: Very broad questions
+        if len(question.split()) > 12:
+            return True
+            
+        return False
+
+    def _build_hybrid_prompt(self, question: str, code_results: List[QueryResult]) -> str:
+        """Create prompt that combines question + code context"""
+        code_context = "\n\n".join(
+            f"File: {r.file}\nCode:\n{r.code}" 
+            for r in code_results
+        )
+        return f"""
+        Analyze this question about a codebase, using the following code snippets as reference.
+        If the question can be answered by referencing specific code, quote the relevant parts.
+        
+        Question: {question}
+        
+        Relevant Code:
+        {code_context}
+        
+        Answer:
+        """
