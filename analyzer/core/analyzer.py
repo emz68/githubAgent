@@ -111,20 +111,12 @@ class CodeAnalyzer:
             return self.advanced_query(question, conversational=conversational)  # Uses API
          """
 
-    def smart_query(self, question: str, *, max_code_results: int = 3, force_analytical: bool = False, force_semantic: bool = False) -> Response:
-        """
-        Unified endpoint that automatically:
-        - Uses pure ChromaDB for code retrieval
-        - Only invokes LLM when truly needed
-        - Returns consistent response format
-        """
-        # Step 1: Always try semantic search first (no API call)
+    def smart_query(self, question: str, *, max_code_results: int = 3,force_analytical: bool = False) -> Response:
+        # Step 1: Pure ChromaDB search (no logging)
         code_results = self.vector_store.query(question, max_code_results)
         
-        # Step 2: Determine if we need deeper analysis
-        needs_analysis = (
-            force_analytical or
-            (not force_semantic and self._requires_analysis(question, code_results)))
+        # Step 2: Heuristic to determine if analysis is needed
+        needs_analysis = force_analytical or self._requires_analysis(question, code_results)
         
         if not needs_analysis:
             return Response(
@@ -135,21 +127,32 @@ class CodeAnalyzer:
                 }
             )
         
-        # Step 3: Generate analytical answer (with code references)
+        # Step 3: Only log when LLM is actually used
         prompt = self._build_hybrid_prompt(question, code_results)
-        answer = self.openai.client.chat.completions.create(
+        response = self.openai.client.chat.completions.create(
             model="o4-mini",
-            messages=[{"role": "user", "content": prompt}],
-        ).choices[0].message.content
+            messages=[{"role": "user", "content": prompt}]
+        )
+        
+        # Log this API call
+        self.openai._log_usage(
+            operation="smart_query_analytical",
+            model="o4-mini",
+            usage={
+                "prompt_tokens": response.usage.prompt_tokens,
+                "completion_tokens": response.usage.completion_tokens,
+                "total_tokens": response.usage.total_tokens
+            }
+        )
         
         return Response(
-            content=answer,
+            content=response.choices[0].message.content,
             context={
                 'supporting_code': [r.code for r in code_results],
                 'sources': [r.file for r in code_results]
             }
         )
-
+    
     def _requires_analysis(self, question: str, code_results: List[QueryResult]) -> bool:
         """Heuristic to decide between raw code vs LLM analysis"""
         question_lower = question.lower()
