@@ -19,7 +19,7 @@ class CodeAnalyzer:
         self.chunker = CodeChunker()
         self.github = GitHubIntegration()
         self.openai = OpenAIInterface()
-        self.langchain = LangChainIntegration(self.vector_store)
+        self.langchain = LangChainIntegration(self.vector_store, self.openai)
         self.file_utils = FileUtils()
     
     def process_local_folder(self, folder_path: str) -> None:
@@ -76,3 +76,10 @@ class CodeAnalyzer:
     def advanced_query(self, question: str, conversational: bool = False) -> str:
         """Use LangChain for more sophisticated queries"""
         return self.langchain.query(question, conversational)
+    
+    def print_usage_stats(self):
+        """Convenience method to show current usage"""
+        stats = self.openai.get_usage_summary()
+        print(f"\nAPI Usage Summary:")
+        print(f"Total Calls: {stats['total_calls']}")
+        print(f"Total Tokens: {stats['total_tokens']}")
