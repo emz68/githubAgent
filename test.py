@@ -5,22 +5,35 @@ from analyzer.core.analyzer import CodeAnalyzer
 
 def main():
     analyzer = CodeAnalyzer()
+    print("--------------------------------------------------------\n")
     print("GitHub Agent Console - Ask it something")
     print("Commands:\n")
     print("Process repository: process <repository_url>\n")
     print("Update private repository token: token\n")
     print("See API usage: stats\n")
-    print("Clear history: clear\n")
+    print("Clear conversation history: clear\n")
     print("Quit: exit\n")
     
     current_token = None  # Stores the active GitHub token
     
     while True:
+        print("--------------------------------------------------------\n")
+        print("To see commands: commands")
+
         try:
             user_input = input("> ").strip()
             
             if user_input.lower() in ['exit', 'quit']:
                 break
+
+            if user_input.lower() in ['commands']:
+                print("Commands:\n")
+                print("Process repository: process <repository_url>\n")
+                print("Update private repository token: token\n")
+                print("See API usage: stats\n")
+                print("Clear history: clear\n")
+                print("Quit: exit\n")
+                continue
                 
             # Special commands
             if user_input.startswith('process '):
@@ -53,10 +66,10 @@ def main():
                 response = analyzer.smart_query(user_input)
                 print(response)
             else:
-                print("! No codebase loaded. Use 'process <repo_url>' first")
+                print("! No codebase loaded. Please use 'process <repo_url>' first")
                 
         except KeyboardInterrupt:
-            print("\nUse 'exit' to quit")
+            break
         except Exception as e:
             print(f"Error: {str(e)}")
 

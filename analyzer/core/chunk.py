@@ -6,7 +6,7 @@ import warnings
 class CodeChunker:
     def __init__(self):
         """Initialize AST-based code chunker"""
-        pass  # No setup needed for Python AST
+        pass
 
     def chunk_file(self, filepath: Path) -> List[Tuple[str, Dict]]:
         """

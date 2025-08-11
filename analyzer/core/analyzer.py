@@ -1,6 +1,6 @@
-from typing import List, Dict, Optional, Literal, Union
+from typing import List, Optional
 from pathlib import Path
-from ..models.schemas import CodeChunk, QueryResult
+from ..models.schemas import QueryResult
 from ..integrations.github import GitHubIntegration
 from ..integrations.langchain import LangChainIntegration
 from ..integrations.openai import OpenAIInterface
@@ -8,19 +8,11 @@ from .embeddings import EmbeddingManager
 from .vector_stores import VectorStoreManager
 from .chunk import CodeChunker
 from ..utils.file_utils import FileUtils
-from dataclasses import dataclass
-
-@dataclass
-class Response:
-    content: Union[str, List[str]]  # Could be answer or code snippets
-    context: dict = None
-    needs_clarification: bool = False
 
 class CodeAnalyzer:
     def __init__(self):
         self.embedding_manager = EmbeddingManager()
         self.vector_store = VectorStoreManager()
-        #self.vector_store = VectorStoreManager(embedding_dimension=1024)
         self.vector_store.reset_collection() 
         self.chunker = CodeChunker()
         self.github = GitHubIntegration()
@@ -29,12 +21,11 @@ class CodeAnalyzer:
         self.file_utils = FileUtils()
     
     def process_local_folder(self, folder_path: str) -> None:
-        """Process a local folder of Python files"""
+        """Process files in multiple languages"""
         folder = Path(folder_path)
         if not folder.exists():
             raise ValueError(f"Folder not found: {folder_path}")
         
-        # Process with ChromaDB
         documents, metadatas, ids = [], [], []
         chunk_count = 0
         
@@ -69,7 +60,7 @@ class CodeAnalyzer:
         print(f"Total Tokens: {stats['total_tokens']}")
 
     def smart_query(self, question: str, *, max_code_results: int = 3,force_analytical: bool = False):
-        # Step 1: Pure ChromaDB search (no logging)
+        # Step 1: Pure ChromaDB search
         code_results = self.vector_store.query(question, max_code_results)
         
         # Step 2: Heuristic to determine if analysis is needed
@@ -87,7 +78,7 @@ class CodeAnalyzer:
         # Use LangChain for the analytical response
         return self.langchain.query(
             question=question,
-            conversational=False,
+            conversational=True,
             context=context  # Pass the context directly
         )
         
@@ -113,49 +104,3 @@ class CodeAnalyzer:
             return True
             
         return False
-
-    def _build_hybrid_prompt(self, question: str, code_results: List[QueryResult]) -> str:
-        """Create prompt that combines question + code context"""
-        code_context = "\n\n".join(
-            f"File: {r.file}\nCode:\n{r.code}" 
-            for r in code_results
-        )
-        return f"""
-        Analyze this question about a codebase, using the following code snippets as reference.
-        If the question can be answered by referencing specific code, quote the relevant parts.
-        
-        Question: {question}
-        
-        Relevant Code:
-        {code_context}
-        
-        Answer:
-        """
-    
-    def _format_response(self, llm_response: str, code_snippets: List[str], sources: List[str]) -> str:
-        """Formats the response for console output"""
-        divider = "─" * 50
-        formatted = []
-        
-        # 1. Add LLM explanation
-        formatted.append(f"\n{divider}")
-        formatted.append("ANALYSIS")
-        formatted.append(divider)
-        formatted.append(llm_response.strip())
-        
-        # 2. Add relevant code snippets
-        if code_snippets:
-            formatted.append(f"\n{divider}")
-            formatted.append("RELEVANT CODE")
-            formatted.append(divider)
-            for i, snippet in enumerate(code_snippets, 1):
-                formatted.append(f"\n▶ Snippet {i}:\n{snippet.strip()}")
-        
-        # 3. Add source references
-        if sources:
-            formatted.append(f"\n{divider}")
-            formatted.append("SOURCE FILES")
-            formatted.append(divider)
-            formatted.append("\n".join(f"• {Path(f).name}" for f in sources))
-        
-        return "\n".join(formatted)

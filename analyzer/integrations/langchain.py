@@ -6,11 +6,7 @@ from ..integrations.openai import OpenAIInterface
 
 class LangChainIntegration:
     def __init__(self, vector_store, openai_interface: OpenAIInterface):
-        """
-        Args:
-            vector_store:  VectorStoreManager instance
-            openai_interface:  existing OpenAIInterface
-        """
+
         self.vector_store = vector_store
         self.openai = openai_interface
         self._initialize_components()

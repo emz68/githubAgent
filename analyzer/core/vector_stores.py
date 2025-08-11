@@ -3,10 +3,12 @@ from chromadb.utils import embedding_functions
 from typing import List, Dict
 import logging
 import torch
-from langchain.vectorstores import Chroma
+from langchain_community.vectorstores import Chroma
 from langchain.text_splitter import RecursiveCharacterTextSplitter, Language
-from langchain.document_loaders import DirectoryLoader, TextLoader
-from langchain_community.embeddings import OpenAIEmbeddings, HuggingFaceEmbeddings
+from langchain_community.document_loaders import DirectoryLoader
+from langchain_community.document_loaders import TextLoader
+from langchain_openai import OpenAIEmbeddings
+from langchain_huggingface import HuggingFaceEmbeddings
 from ..models.schemas import QueryResult
 
 class VectorStoreManager:
