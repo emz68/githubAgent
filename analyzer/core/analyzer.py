@@ -22,7 +22,6 @@ class CodeAnalyzer:
         self.vector_store = VectorStoreManager()
         #self.vector_store = VectorStoreManager(embedding_dimension=1024)
         self.vector_store.reset_collection() 
-
         self.chunker = CodeChunker()
         self.github = GitHubIntegration()
         self.openai = OpenAIInterface()
@@ -62,23 +61,6 @@ class CodeAnalyzer:
         finally:
             self.file_utils.cleanup_temp_dir(temp_dir)
     
-    def query_codebase(self, question: str, n_results: int = 3, explain: bool = False) -> List[QueryResult]:
-        results = self.vector_store.query(question, n_results)
-        
-        if explain:  # Only call OpenAI if explicitly requested
-            for result in results:
-                result.explanation = self.openai.generate_explanation(
-                    question=question,
-                    code=result.code,
-                    context={"file": result.file, "type": result.type, "name": result.name}
-                )
-                
-        return results
-    
-    def advanced_query(self, question: str, conversational: bool = False) -> str:
-        """Use LangChain for more sophisticated queries"""
-        return self.langchain.query(question, conversational)
-    
     def print_usage_stats(self):
         """Convenience method to show current usage"""
         stats = self.openai.get_usage_summary()
@@ -86,32 +68,7 @@ class CodeAnalyzer:
         print(f"Total Calls: {stats['total_calls']}")
         print(f"Total Tokens: {stats['total_tokens']}")
 
-    def _classify_intent(self, question: str) -> Literal["SEMANTIC_SEARCH", "ANALYTICAL"]:
-        """Rule-based intent classifier (Option A)."""
-        question = question.lower().strip()
-        
-        analytical_keywords = [
-            "explain", "how", "why", "describe", "walk me through",
-            "analyze", "what is", "compare", "summarize"
-        ]
-        
-        # Questions with these keywords or longer than 15 words -> ANALYTICAL
-        if (any(keyword in question for keyword in analytical_keywords) or
-            len(question.split()) > 15):
-            return "ANALYTICAL"
-        return "SEMANTIC_SEARCH"
-    
-    """ def query_auto(self, question: str, n_results: int = 3, conversational: bool = False) -> str | List[QueryResult]:
-
-        intent = self._classify_intent(question)
-        
-        if intent == "SEMANTIC_SEARCH":
-            return self.query_codebase(question, n_results=n_results, explain=False)  # No API
-        else:
-            return self.advanced_query(question, conversational=conversational)  # Uses API
-         """
-
-    def smart_query(self, question: str, *, max_code_results: int = 3,force_analytical: bool = False) -> Response:
+    def smart_query(self, question: str, *, max_code_results: int = 3,force_analytical: bool = False):
         # Step 1: Pure ChromaDB search (no logging)
         code_results = self.vector_store.query(question, max_code_results)
         
@@ -119,39 +76,21 @@ class CodeAnalyzer:
         needs_analysis = force_analytical or self._requires_analysis(question, code_results)
         
         if not needs_analysis:
-            return Response(
-                content=[r.code for r in code_results],
-                context={
-                    'files': [r.file for r in code_results],
-                    'types': [r.type for r in code_results]
-                }
-            )
+            return code_results
         
-        # Step 3: Only log when LLM is actually used
-        prompt = self._build_hybrid_prompt(question, code_results)
-        response = self.openai.client.chat.completions.create(
-            model="o4-mini",
-            messages=[{"role": "user", "content": prompt}]
+        # Step 3: Prepare context for LangChain
+        context = "\n\n".join(
+            f"File: {r.file}\nCode:\n{r.code}" 
+            for r in code_results
         )
         
-        # Log this API call
-        self.openai._log_usage(
-            operation="smart_query_analytical",
-            model="o4-mini",
-            usage={
-                "prompt_tokens": response.usage.prompt_tokens,
-                "completion_tokens": response.usage.completion_tokens,
-                "total_tokens": response.usage.total_tokens
-            }
+        # Use LangChain for the analytical response
+        return self.langchain.query(
+            question=question,
+            conversational=False,
+            context=context  # Pass the context directly
         )
         
-        return Response(
-            content=response.choices[0].message.content,
-            context={
-                'supporting_code': [r.code for r in code_results],
-                'sources': [r.file for r in code_results]
-            }
-        )
     
     def _requires_analysis(self, question: str, code_results: List[QueryResult]) -> bool:
         """Heuristic to decide between raw code vs LLM analysis"""
@@ -192,3 +131,31 @@ class CodeAnalyzer:
         
         Answer:
         """
+    
+    def _format_response(self, llm_response: str, code_snippets: List[str], sources: List[str]) -> str:
+        """Formats the response for console output"""
+        divider = "─" * 50
+        formatted = []
+        
+        # 1. Add LLM explanation
+        formatted.append(f"\n{divider}")
+        formatted.append("ANALYSIS")
+        formatted.append(divider)
+        formatted.append(llm_response.strip())
+        
+        # 2. Add relevant code snippets
+        if code_snippets:
+            formatted.append(f"\n{divider}")
+            formatted.append("RELEVANT CODE")
+            formatted.append(divider)
+            for i, snippet in enumerate(code_snippets, 1):
+                formatted.append(f"\n▶ Snippet {i}:\n{snippet.strip()}")
+        
+        # 3. Add source references
+        if sources:
+            formatted.append(f"\n{divider}")
+            formatted.append("SOURCE FILES")
+            formatted.append(divider)
+            formatted.append("\n".join(f"• {Path(f).name}" for f in sources))
+        
+        return "\n".join(formatted)

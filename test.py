@@ -1,32 +1,68 @@
 import sys
 from pathlib import Path
-
-# Add the package directory to Python path
-sys.path.insert(0, str(Path(__file__).parent))
-
+from getpass import getpass
 from analyzer.core.analyzer import CodeAnalyzer
 
 def main():
     analyzer = CodeAnalyzer()
+    print("GitHub Agent Console - Ask it something")
+    print("Commands:\n")
+    print("Process repository: process <repository_url>\n")
+    print("Update private repository token: token\n")
+    print("See API usage: stats\n")
+    print("Clear history: clear\n")
+    print("Quit: exit\n")
     
-    # Example usage
-    analyzer.process_github_repo("https://github.com/oxylabs/Python-Web-Scraping-Tutorial")
+    current_token = None  # Stores the active GitHub token
     
-    
-    answer = analyzer.smart_query("What is this repository about?")
+    while True:
+        try:
+            user_input = input("> ").strip()
+            
+            if user_input.lower() in ['exit', 'quit']:
+                break
+                
+            # Special commands
+            if user_input.startswith('process '):
+                repo_url = user_input[8:].strip()
+                try:
+                    if "private" in repo_url.lower() and not current_token:
+                        current_token = getpass("Enter GitHub token (hidden input): ")
+                    analyzer.process_github_repo(repo_url, token=current_token)
+                    print(f"✓ Processed repository: {repo_url}")
+                except Exception as e:
+                    print(f"Error: {str(e)}")
+                continue
+                
+            if user_input == 'token':
+                current_token = getpass("Enter new GitHub token (hidden input): ")
+                print("✓ Token updated")
+                continue
+                
+            if user_input == 'stats':
+                analyzer.print_usage_stats()
+                continue
+                
+            if user_input == 'clear':
+                analyzer.conversation.clear()
+                print("✓ Conversation history cleared")
+                continue
+                
+            # Query handling
+            if analyzer.vector_store.collection.count() > 0:
+                response = analyzer.smart_query(user_input)
+                print(response)
+            else:
+                print("! No codebase loaded. Use 'process <repo_url>' first")
+                
+        except KeyboardInterrupt:
+            print("\nUse 'exit' to quit")
+        except Exception as e:
+            print(f"Error: {str(e)}")
 
-    if isinstance(answer.content, str):
-    # Analytical answer
-        print(f"Analysis: {answer.content}")
-        print("Supported by:", answer.context['sources'])
-    else:
-        # Raw code results
-        for code in answer.content:
-            print(code)
-
+    print("\nSession ended. Final stats:")
     analyzer.print_usage_stats()
-    
-    analyzer.langchain.clear_memory()
 
 if __name__ == "__main__":
+    sys.path.insert(0, str(Path(__file__).parent))
     main()
