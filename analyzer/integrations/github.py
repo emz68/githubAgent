@@ -1,7 +1,5 @@
 from github import Github
 import requests
-import tempfile
-import shutil
 import os
 from typing import Optional
 

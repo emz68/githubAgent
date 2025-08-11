@@ -3,7 +3,7 @@
 /.chromadb
 /vendor
 /.chromadb_langchain
-/.env
+
 analyzer\core\__pycache__
 /analyzer/core/__pycache__
 /analyzer/integrations/__pycache__
