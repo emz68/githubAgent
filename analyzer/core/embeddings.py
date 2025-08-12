@@ -1,10 +1,9 @@
 from transformers import AutoModel, AutoTokenizer
-from langchain.embeddings import HuggingFaceEmbeddings
 import torch
 
 class EmbeddingManager:
     def __init__(self):
-        self.model_name = "Salesforce/SFR-Embedding-Code-400M-R"  # Note: Correct hyphen
+        self.model_name = "Salesforce/SFR-Embedding-Code-400M-R"
         self._initialize_models()
 
     def _initialize_models(self):

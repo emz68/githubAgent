@@ -1,6 +1,6 @@
-from typing import List, Dict, Optional
+from typing import List, Optional
 from pathlib import Path
-from ..models.schemas import CodeChunk, QueryResult
+from ..models.schemas import QueryResult
 from ..integrations.github import GitHubIntegration
 from ..integrations.langchain import LangChainIntegration
 from ..integrations.openai import OpenAIInterface
@@ -13,9 +13,7 @@ class CodeAnalyzer:
     def __init__(self):
         self.embedding_manager = EmbeddingManager()
         self.vector_store = VectorStoreManager()
-        #self.vector_store = VectorStoreManager(embedding_dimension=1024)
         self.vector_store.reset_collection() 
-
         self.chunker = CodeChunker()
         self.github = GitHubIntegration()
         self.openai = OpenAIInterface()
@@ -23,12 +21,11 @@ class CodeAnalyzer:
         self.file_utils = FileUtils()
     
     def process_local_folder(self, folder_path: str) -> None:
-        """Process a local folder of Python files"""
+        """Process files in multiple languages"""
         folder = Path(folder_path)
         if not folder.exists():
             raise ValueError(f"Folder not found: {folder_path}")
         
-        # Process with ChromaDB
         documents, metadatas, ids = [], [], []
         chunk_count = 0
         
@@ -55,31 +52,56 @@ class CodeAnalyzer:
         finally:
             self.file_utils.cleanup_temp_dir(temp_dir)
     
-    def query_codebase(self, question: str, n_results: int = 3, explain: bool = False) -> List[QueryResult]:
-        """Query the codebase with optional explanations"""
-        # Basic vector similarity search
-        results = self.vector_store.query(question, n_results)
-        
-        if explain:
-            for result in results:
-                result.explanation = self.openai.generate_explanation(
-                    question=question,
-                    code=result.code,
-                    context={
-                        "file": result.file,
-                        "type": result.type,
-                        "name": result.name
-                    }
-                )
-        return results
-    
-    def advanced_query(self, question: str, conversational: bool = False) -> str:
-        """Use LangChain for more sophisticated queries"""
-        return self.langchain.query(question, conversational)
-    
     def print_usage_stats(self):
         """Convenience method to show current usage"""
         stats = self.openai.get_usage_summary()
         print(f"\nAPI Usage Summary:")
         print(f"Total Calls: {stats['total_calls']}")
         print(f"Total Tokens: {stats['total_tokens']}")
+
+    def smart_query(self, question: str, *, max_code_results: int = 5,force_analytical: bool = False):
+        # Step 1: Pure ChromaDB search
+        code_results = self.vector_store.query(question, max_code_results)
+        
+        # Step 2: Heuristic to determine if analysis is needed
+        needs_analysis = force_analytical or self._requires_analysis(question, code_results)
+        
+        if not needs_analysis:
+            return code_results
+        
+        # Step 3: Prepare context for LangChain
+        context = "\n\n".join(
+            f"File: {r.file}\nCode:\n{r.code}" 
+            for r in code_results
+        )
+        
+        # Use LangChain for the analytical response
+        return self.langchain.query(
+            question=question,
+            conversational=True,
+            context=context  # Pass the context directly
+        )
+        
+    
+    def _requires_analysis(self, question: str, code_results: List[QueryResult]) -> bool:
+        """Heuristic to decide between raw code vs LLM analysis"""
+        question_lower = question.lower()
+        
+        # Case 1: Clearly analytical questions
+        analytical_phrases = {
+            'how', 'why', 'explain', 'analyze', 
+            'compare', 'what is', 'walkthrough',
+            'what does'
+        }
+        if any(phrase in question_lower for phrase in analytical_phrases):
+            return True
+        
+        # Case 2: Poor semantic search results
+        if not code_results or len(code_results[0].code) < 20:
+            return True
+            
+        # Case 3: Very broad questions
+        if len(question.split()) > 12:
+            return True
+            
+        return False
