@@ -4,14 +4,12 @@ from ..models.schemas import QueryResult
 from ..integrations.github import GitHubIntegration
 from ..integrations.langchain import LangChainIntegration
 from ..integrations.openai import OpenAIInterface
-from .embeddings import EmbeddingManager
 from .vector_stores import VectorStoreManager
 from .chunk import CodeChunker
 from ..utils.file_utils import FileUtils
 
 class CodeAnalyzer:
     def __init__(self):
-        self.embedding_manager = EmbeddingManager()
         self.vector_store = VectorStoreManager()
         self.vector_store.reset_collection() 
         self.chunker = CodeChunker()
@@ -64,10 +62,10 @@ class CodeAnalyzer:
         code_results = self.vector_store.query(question, max_code_results)
         
         # Step 2: Heuristic to determine if analysis is needed
-        needs_analysis = force_analytical or self._requires_analysis(question, code_results)
+        """ needs_analysis = force_analytical or self._requires_analysis(question, code_results)
         
         if not needs_analysis:
-            return code_results
+            return code_results """
         
         # Step 3: Prepare context for LangChain
         context = "\n\n".join(

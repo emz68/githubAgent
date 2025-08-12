@@ -1,8 +1,8 @@
 from typing import Optional
-from langchain.chains import RetrievalQA, ConversationalRetrievalChain
 from langchain.memory import ConversationBufferMemory
 from langchain.prompts import PromptTemplate
 from ..integrations.openai import OpenAIInterface
+from langchain.schema import HumanMessage, AIMessage
 
 class LangChainIntegration:
     def __init__(self, vector_store, openai_interface: OpenAIInterface):
@@ -34,52 +34,72 @@ class LangChainIntegration:
         )
 
     def query(self, question: str, conversational: bool = False, context: Optional[str] = None) -> str:
-        # If context isn't provided, retrieve it from vector store
-        if context is None:
-            context = "\n".join(
-                doc.page_content for doc in 
-                self.vector_store.vector_store.as_retriever().get_relevant_documents(question)
-            )
+            if context is None:
+                context = "\n".join(
+                    doc.page_content
+                    for doc in self.vector_store.vector_store
+                                    .as_retriever()
+                                    .get_relevant_documents(question)
+                )
 
-        # Format the prompt with the context
-        prompt = self.qa_prompt.format(context=context, question=question)
+            prompt = self.qa_prompt.format(context=context, question=question)
 
-        messages = [
-            {"role": "system", "content": "You are a senior developer analyzing code."},
-            *self.memory.load_memory_variables({})["chat_history"],
-            {"role": "user", "content": prompt}
-        ]
+            # load raw history
+            raw_history = self.memory.load_memory_variables({})["chat_history"]
 
-        try:
-            response = self.openai.client.chat.completions.create(
-                model="o4-mini",
-                messages=messages
-            )
+            # convert to a list of {"role":..., "content":...} dicts
+            formatted_history = []
+            for msg in raw_history:
+                # if already getting back HumanMessage/AIMessage
+                if isinstance(msg, HumanMessage):
+                    formatted_history.append({"role": "user", "content": msg.content})
+                elif isinstance(msg, AIMessage):
+                    formatted_history.append({"role": "assistant", "content": msg.content})
+                # if plain dicts, fall back:
+                elif isinstance(msg, dict) and "input" in msg:
+                    formatted_history.append({"role": "user",    "content": msg["input"]})
+                elif isinstance(msg, dict) and "output" in msg:
+                    formatted_history.append({"role": "assistant", "content": msg["output"]})
+                else:
+                    # drop anything else or raise
+                    continue
 
-            # Log usage
-            if hasattr(response, 'usage'):
-                self.openai._log_usage(
-                    operation="advanced_query",
+            messages = [
+                {"role": "system",    "content": "You are a senior developer analyzing code."},
+                *formatted_history,
+                {"role": "user",      "content": prompt},
+            ]
+
+            try:
+                response = self.openai.client.chat.completions.create(
                     model="o4-mini",
-                    usage={
-                        "prompt_tokens": response.usage.prompt_tokens,
-                        "completion_tokens": response.usage.completion_tokens,
-                        "total_tokens": response.usage.total_tokens
-                    }
+                    messages=messages
                 )
 
-            # Update memory if conversational
-            if conversational:
-                self.memory.save_context(
-                    {"input": question},
-                    {"output": response.choices[0].message.content}
-                )
+                #logging
+                if hasattr(response, 'usage'):
+                    self.openai._log_usage(
+                        operation="advanced_query",
+                        model="o4-mini",
+                        usage={
+                            "prompt_tokens": response.usage.prompt_tokens,
+                            "completion_tokens": response.usage.completion_tokens,
+                            "total_tokens": response.usage.total_tokens
+                        }
+                    )
 
-            return response.choices[0].message.content
+                if conversational:
+                    # save real messages into memory
+                    self.memory.save_context(
+                        {"question": question},
+                        {"answer":   response.choices[0].message.content}
+                    )
 
-        except Exception as e:
-            print(f"Error in query: {e}")
-            return "Query failed."
+                return response.choices[0].message.content
+
+            except Exception as e:
+                print(f"Error in query: {e}")
+                return "Query failed."
         
 
     def clear_memory(self):

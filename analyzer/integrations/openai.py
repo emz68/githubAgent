@@ -17,64 +17,6 @@ class OpenAIInterface:
         self.log_file = Path("logs/openai_usage.log")
         self._setup_logging()
     
-    def generate_explanation(self, question: str, code: str, context: Dict) -> str:
-        """Generate natural language explanation of code"""
-        prompt = self._create_explanation_prompt(question, code, context)
-        try:
-            response = self.client.chat.completions.create(
-                model="o4-mini",
-                messages=[
-                    {"role": "system", "content": "You are a helpful code analyst. You are a senior developer analyzing code. Explain and answer questions about the code to the best of your ability. If you are not sure about file content or codebase structure pertaining to the user’s request, use your tools to read files and gather the relevant information: do NOT make up an answer."},
-                    {"role": "user", "content": prompt}
-                ],
-                temperature=0.3,
-                max_tokens=256
-            )
-
-            if hasattr(response, 'usage'):
-                self._log_usage(
-                    operation="generate_explanation",
-                    model="o4-mini",
-                    usage={
-                        "prompt_tokens": response.usage.prompt_tokens,
-                        "completion_tokens": response.usage.completion_tokens,
-                        "total_tokens": response.usage.total_tokens
-                    }
-                )
-
-            self.usage_stats['total_tokens'] += response.usage.total_tokens
-            self.usage_stats['calls'] += 1
-            
-            return response.choices[0].message.content.strip()
-        
-        except Exception as e:
-            print(f"Error generating explanation: {str(e)}")
-            return "Explanation unavailable"
-    
-    def _create_explanation_prompt(self, question: str, code: str, context: Dict) -> str:
-        """Create prompt for explanation generation"""
-        return f"""You are a senior developer analyzing code. Explain and answer questions about the code to the best of your ability. If you are not sure about file content or codebase structure pertaining to the user’s request, use your tools to read files and gather the relevant information: do NOT guess or make up an answer.
-
-            Question: {question}
-
-            Context:
-            - File: {context['file']}
-            - Type: {context['type']}
-            - Name: {context['name']}
-
-            Code:
-            {code}
-
-            Explanation:
-            """
-    
-    def get_usage(self):
-        """Return current usage statistics"""
-        return {
-            'total_calls': self.usage_stats['calls'],
-            'total_tokens': self.usage_stats['total_tokens']
-        }
-    
     def _setup_logging(self):
         """Ensure logs directory exists"""
         self.log_file.parent.mkdir(exist_ok=True)
