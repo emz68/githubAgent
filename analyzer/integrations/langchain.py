@@ -33,7 +33,7 @@ class LangChainIntegration:
             """
         )
 
-    def query(self, question: str, conversational: bool = False, context: Optional[str] = None) -> str:
+    def query(self, question: str, conversational: bool = True, context: Optional[str] = None) -> str:
             if context is None:
                 context = "\n".join(
                     doc.page_content

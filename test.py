@@ -63,7 +63,7 @@ def main():
                 
             # Query handling
             if analyzer.vector_store.collection.count() > 0:
-                print("What's the maximum number of files that should be analyzed for this prompt?\n")
+                print("What's the maximum number of files that should be analyzed for this prompt?")
                 user_file_num = int(input().strip())
                 response = analyzer.smart_query(user_input, max_code_results = user_file_num)
                 print(response)

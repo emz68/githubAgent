@@ -5,6 +5,9 @@ from pathlib import Path
 from typing import Optional
 
 class FileUtils:
+    """Utility class grouping file operations as static methods.
+    Designed to be used without instantiation."""
+    
     @staticmethod
     def create_temp_dir() -> str:
         """Create and return path to temporary directory"""

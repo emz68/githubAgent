@@ -10,6 +10,8 @@ from langchain_community.document_loaders import TextLoader
 from langchain_openai import OpenAIEmbeddings
 from langchain_huggingface import HuggingFaceEmbeddings
 from ..models.schemas import QueryResult
+from ..core.chunk import CodeChunker
+from pathlib import Path
 
 class VectorStoreManager:
     def __init__(self):
@@ -109,21 +111,22 @@ class VectorStoreManager:
             raise
 
     def process_folder_for_langchain(self, folder_path: str):
-        """Process folder for LangChain vector store"""
-        loader = DirectoryLoader(
-            folder_path,
-            glob="**/*.py",
-            loader_cls=TextLoader,
-            loader_kwargs={'autodetect_encoding': True}
-        )
+        """Process folder using AST-based semantic chunking"""
+        chunker = CodeChunker()
+        documents = []
+        metadatas = []
         
-        documents = loader.load()
-        python_documents = self.text_splitter.split_documents(documents)
+        # Process all Python files in the folder
+        for filepath in Path(folder_path).rglob("*.py"):
+            chunks = chunker.chunk_file(filepath)
+            for chunk_text, metadata in chunks:
+                documents.append(chunk_text)
+                metadatas.append(metadata)
         
         # Create vector store with both embedding types
         self.vector_store = Chroma.from_documents(
-            documents=python_documents,
+            documents=documents,
             embedding=self.embeddings["openai"],
-            persist_directory=".chromadb_langchain"
+            persist_directory=".chromadb_langchain",
+            metadatas=metadatas
         )
-        print(f"Processed {len(python_documents)} documents for LangChain")
