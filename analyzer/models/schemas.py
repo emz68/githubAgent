@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import Optional, Dict, List
+from typing import Optional
 
 class QueryResult(BaseModel):
     code: str

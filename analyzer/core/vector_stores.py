@@ -5,8 +5,6 @@ import logging
 import torch
 from langchain_community.vectorstores import Chroma
 from langchain.text_splitter import RecursiveCharacterTextSplitter, Language
-from langchain_community.document_loaders import DirectoryLoader
-from langchain_community.document_loaders import TextLoader
 from langchain_openai import OpenAIEmbeddings
 from langchain_huggingface import HuggingFaceEmbeddings
 from ..models.schemas import QueryResult
@@ -15,7 +13,6 @@ from pathlib import Path
 
 class VectorStoreManager:
     def __init__(self):
-        #self.model_name = model_name
         self.logger = logging.getLogger(__name__)
         self._initialize_chroma()
         self.text_splitter = RecursiveCharacterTextSplitter.from_language(
@@ -33,9 +30,7 @@ class VectorStoreManager:
         """Initialize ChromaDB client and collection with proper embedding function"""
         self.client = chromadb.PersistentClient(path=".chromadb")
         
-        # Initialize with correct embedding function that handles dimensions automatically
         self.embedding_function = embedding_functions.SentenceTransformerEmbeddingFunction(
-            #model_name=self.model_name,
             trust_remote_code=True,
             device="cuda" if torch.cuda.is_available() else "cpu"
         )
