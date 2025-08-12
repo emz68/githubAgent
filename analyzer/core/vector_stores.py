@@ -83,7 +83,7 @@ class VectorStoreManager:
             self.logger.error(f"Add failed: {str(e)}")
             raise    
 
-    def query(self, question: str, n_results: int = 3) -> List[QueryResult]:
+    def query(self, question: str, n_results: int = 5) -> List[QueryResult]:
         try:
             results = self.collection.query(
                 query_texts=[question],

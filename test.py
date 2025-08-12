@@ -18,7 +18,7 @@ def main():
     
     while True:
         print("--------------------------------------------------------\n")
-        print("To see commands: commands")
+        print("Ask a question or type 'commands' to see the list of commands")
 
         try:
             user_input = input("> ").strip()
@@ -63,7 +63,9 @@ def main():
                 
             # Query handling
             if analyzer.vector_store.collection.count() > 0:
-                response = analyzer.smart_query(user_input)
+                print("How many files should be analyzed for this prompt?\n")
+                user_file_num = int(input().strip())
+                response = analyzer.smart_query(user_input, max_code_results = user_file_num)
                 print(response)
             else:
                 print("! No codebase loaded. Please use 'process <repo_url>' first")

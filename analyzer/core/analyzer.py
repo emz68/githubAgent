@@ -59,7 +59,7 @@ class CodeAnalyzer:
         print(f"Total Calls: {stats['total_calls']}")
         print(f"Total Tokens: {stats['total_tokens']}")
 
-    def smart_query(self, question: str, *, max_code_results: int = 3,force_analytical: bool = False):
+    def smart_query(self, question: str, *, max_code_results: int = 5,force_analytical: bool = False):
         # Step 1: Pure ChromaDB search
         code_results = self.vector_store.query(question, max_code_results)
         
@@ -90,7 +90,8 @@ class CodeAnalyzer:
         # Case 1: Clearly analytical questions
         analytical_phrases = {
             'how', 'why', 'explain', 'analyze', 
-            'compare', 'what is', 'walkthrough'
+            'compare', 'what is', 'walkthrough',
+            'what does'
         }
         if any(phrase in question_lower for phrase in analytical_phrases):
             return True
