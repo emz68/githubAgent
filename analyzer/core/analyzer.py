@@ -77,7 +77,7 @@ class CodeAnalyzer:
         return self.langchain.query(
             question=question,
             conversational=True,
-            context=context\
+            context=context
         )
         
     

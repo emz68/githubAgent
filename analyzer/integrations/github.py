@@ -1,5 +1,4 @@
 from github import Github
-import requests
 import os
 from typing import Optional
 
@@ -39,11 +38,3 @@ class GitHubIntegration:
                     with open(file_path, 'wb') as f:
                         f.write(file_content.decoded_content)
     
-    def process_gist(self, gist_url: str):
-        """Process a GitHub Gist"""
-        gist_id = gist_url.split('/')[-1].split('.')[0]
-        api_url = f"https://api.github.com/gists/{gist_id}"
-        
-        response = requests.get(api_url)
-        response.raise_for_status()
-        return response.json()

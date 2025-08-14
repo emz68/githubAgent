@@ -2,7 +2,6 @@ import chromadb
 from chromadb.utils import embedding_functions
 from typing import List, Dict
 import logging
-import torch
 from langchain_community.vectorstores import Chroma
 from langchain.text_splitter import RecursiveCharacterTextSplitter, Language
 from langchain_openai import OpenAIEmbeddings
@@ -31,8 +30,7 @@ class VectorStoreManager:
         self.client = chromadb.PersistentClient(path=".chromadb")
         
         self.embedding_function = embedding_functions.SentenceTransformerEmbeddingFunction(
-            trust_remote_code=True,
-            device="cuda" if torch.cuda.is_available() else "cpu"
+            trust_remote_code=True
         )
         
         self.collection = self.client.get_or_create_collection(
@@ -121,7 +119,7 @@ class VectorStoreManager:
         # Create vector store with both embedding types
         self.vector_store = Chroma.from_documents(
             documents=documents,
-            embedding=self.embeddings["openai"],
+            embedding=self.embeddings["hf"],
             persist_directory=".chromadb_langchain",
             metadatas=metadatas
         )

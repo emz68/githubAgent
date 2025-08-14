@@ -6,13 +6,9 @@ from analyzer.core.analyzer import CodeAnalyzer
 def main():
     analyzer = CodeAnalyzer()
     print("-------------------------------------------------------------\n")
-    print("GitHub Agent Console - Ask it something")
-    print("Commands:\n")
-    print("Process repository: process <repository_url>\n")
-    #print("Update private repository token: token\n")
-    print("See API usage: stats\n")
-    print("Clear conversation history: clear\n")
-    print("Quit: exit\n")
+    print("GitHub Agent Console")
+    print("To begin, type 'process <repository_url>'")
+    print("To quit, type 'exit'\n")
     
     current_token = None  # Stores the active GitHub token
     
